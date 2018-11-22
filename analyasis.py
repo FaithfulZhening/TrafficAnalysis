@@ -62,11 +62,11 @@ def flow_analysis(flow,oneway):
     tcp_flow = 0
     udp_flow = 0
     for key, eths in flow.items():
-        is_tcp = False;
-        is_udp = False;
+        is_tcp = False
+        is_udp = False
         maxTime = 0
         minTime = math.inf
-        last_packet_time = -1;
+        last_packet_time = -1
         if eths[0][0].data.p == dpkt.ip.IP_PROTO_TCP:
             is_tcp = True
         elif eths[0][0].data.p == dpkt.ip.IP_PROTO_UDP:
@@ -143,10 +143,10 @@ def tcp_flow_state_analysis(flow):
             ip = eth.data
             tcp = ip.data
             # flags
-            fin_flag = (tcp.flags & dpkt.tcp.TH_FIN) != 0
-            syn_flag = (tcp.flags & dpkt.tcp.TH_SYN) != 0
-            rst_flag = (tcp.flags & dpkt.tcp.TH_RST) != 0
-            ack_flag = (tcp.flags & dpkt.tcp.TH_ACK) != 0
+            fin_flag = (tcp.flags & dpkt.tcp.TH_FIN)
+            syn_flag = (tcp.flags & dpkt.tcp.TH_SYN)
+            rst_flag = (tcp.flags & dpkt.tcp.TH_RST)
+            ack_flag = (tcp.flags & dpkt.tcp.TH_ACK)
 
             # check for request state
             if syn_flag and (not ack_flag) and len(eths) == 1:
@@ -165,7 +165,7 @@ def tcp_flow_state_analysis(flow):
                 src_ack = True
             if dst_fin and ack_flag and (not dst_ack) and (ip.src == src) and (tcp.ack == dst_seq_number + 1):
                 dst_ack = True
-            if src_ack and dst_ack:
+        if src_ack and dst_ack:
                 finished_cnt += 1
 
         last_packet = eths[-1]
@@ -173,11 +173,49 @@ def tcp_flow_state_analysis(flow):
         # check for reset state
         if (last_packet_tcp.flags & dpkt.tcp.TH_RST):
             reset_cnt += 1
-        if (last_packet_tcp.flags & syn_flag) and (not (last_packet_tcp.flags & ack_flag)):
-            print("request")
     print(finished_cnt)
     print(request_cnt)
     print(reset_cnt)
+    print(total_cnt)
+
+
+def flow_size_analysis(flow):
+    flow_packet_cnt = []
+    tcp_flow_packet_cnt = []
+    udp_flow_packet_cnt = []
+    flow_byte_cnt = []
+    tcp_flow_byte_cnt = []
+    udp_flow_byte_cnt = []
+    for key, eths in flow.items():
+        is_tcp = False
+        is_udp = False
+        packet_cnt = 0
+        tcp_packet_cnt = 0
+        udp_packet_cnt = 0
+        byte_sum = 0
+        tcp_byte_sum = 0
+        udp_byte_sum = 0
+
+        if eths[0][0].data.p == dpkt.ip.IP_PROTO_TCP:
+            is_tcp = True
+        elif eths[0][0].data.p == dpkt.ip.IP_PROTO_UDP:
+            is_udp = True
+        for (eth,timestamp) in eths:
+            if is_tcp:
+                tcp_packet_cnt += 1
+            if is_udp:
+                udp_packet_cnt += 1
+            packet_cnt += 1
+            print(eth.__len__())
+        #delete outlier
+        if is_tcp:
+            tcp_flow_packet_cnt.append(tcp_packet_cnt)
+        if is_udp:
+            udp_flow_packet_cnt.append(udp_packet_cnt)
+        flow_packet_cnt.append(packet_cnt)
+    #plot_cdf(tcp_flow_packet_cnt, "", "", "TCP Flows Packet Number", False)
+    #plot_cdf(udp_flow_packet_cnt, "", "", "UDP Flows Packet Number", True)
+    #plot_cdf(flow_packet_cnt, "", "", "All Flows Packet Number", False)
 
 
 
@@ -191,6 +229,7 @@ def inet_to_str(inet):
 if __name__ == "__main__":
     oneway = False
     flow = parse_pcap_file('test.pcap', oneway)
-    # flow = parse_pcap_file('univ1_pt20.pcap',oneway)
+    #flow = parse_pcap_file('univ1_pt20.pcap',oneway)
     # flow_analysis(flow,oneway)
-    tcp_flow_state_analysis(flow)
+    #tcp_flow_state_analysis(flow)
+    flow_size_analysis(flow)
