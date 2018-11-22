@@ -1,16 +1,15 @@
 import dpkt
+import socket
 import math
 from datetime import datetime
 from plot import plot_cdf
 
 # code partly from http://amirrazmjou.net/data-mining-pcap-files-using-weka-and-python-dpkt-library/
-def parse_pcap_file(input_file_name):
+def parse_pcap_file(input_file_name, oneway):
     #variables
     flow = dict()
     tcp_number = 0;
     udp_number = 0;
-
-
     f = open(input_file_name,'rb')
     data = dpkt.pcap.Reader(f)
 
@@ -28,52 +27,170 @@ def parse_pcap_file(input_file_name):
         else:
             continue
 
-
         conn = ip.data
         tupl = ((ip.src, conn.sport), (ip.dst, conn.dport))
         rtupl = ((ip.dst, conn.dport), (ip.src, conn.sport))
 
-        if tupl in flow:
-            flow[tupl].append((eth,timestamp))
-        elif rtupl in flow:
-            flow[rtupl].append((eth,timestamp))
+        if not oneway:
+            if tupl in flow:
+                flow[tupl].append((eth, timestamp))
+            elif rtupl in flow:
+                flow[rtupl].append((eth, timestamp))
+            else:
+                flow[tupl] = [(eth, timestamp)]
         else:
-            flow[tupl] = [(eth,timestamp)]
+            if tupl in flow:
+                flow[tupl].append((eth, timestamp))
+            else:
+                flow[tupl] = [(eth, timestamp)]
+
+
     #write statistics to file
 
     return flow
     #save_obj(flow)
 
 
-def main():
-    flow = parse_pcap_file('test.pcap')
-    #flow = parse_pcap_file('univ1_pt20.pcap')
+def flow_analysis(flow,oneway):
+    #statistics about flow
     statistics_per_flow_duration = []
     statistics_per_tcp_flow_duration = []
     statistics_per_udp_flow_duration = []
+    statistics_per_flow_arrival_interval = []
+    statistics_per_tcp_flow_arrival_interval = []
+    statistics_per_udp_flow_arrival_interval = []
     tcp_flow = 0
     udp_flow = 0
     for key, eths in flow.items():
+        is_tcp = False;
+        is_udp = False;
         maxTime = 0
         minTime = math.inf
+        last_packet_time = -1;
+        if eths[0][0].data.p == dpkt.ip.IP_PROTO_TCP:
+            is_tcp = True
+        elif eths[0][0].data.p == dpkt.ip.IP_PROTO_UDP:
+            is_udp = True
         for (eth,timestamp) in eths:
             #print(datetime.fromtimestamp(timestamp))
             if timestamp > maxTime:
                 maxTime = timestamp
             if timestamp < minTime:
                 minTime = timestamp
+            if last_packet_time == -1:
+                interval = 0
+                last_packet_time = timestamp
+            else:
+                interval = (timestamp - last_packet_time) * 1000
+                last_packet_time = timestamp
+            statistics_per_flow_arrival_interval.append(interval)
+            if is_tcp:
+                statistics_per_tcp_flow_arrival_interval.append(interval)
+                print(interval)
+            elif is_udp:
+                statistics_per_udp_flow_arrival_interval.append(interval)
+
         #print((maxTime-minTime)*1000)
+        #convert to miliseconds
         duration = (maxTime-minTime)*1000
+        # if duration != 0:
+        #     statistics_per_flow_duration.append(duration)
         statistics_per_flow_duration.append(duration)
-        if (eths[0][0].data.p == dpkt.ip.IP_PROTO_TCP):
+        if is_tcp:
             tcp_flow += 1
             statistics_per_tcp_flow_duration.append(duration)
-        elif (eths[0][0].data.p == dpkt.ip.IP_PROTO_UDP):
+        elif is_udp:
             udp_flow += 1
             statistics_per_udp_flow_duration.append(duration)
-    plot_cdf(statistics_per_flow_duration)
-
+    # plot_cdf(statistics_per_flow_duration,"","","total flow duration",False)
+    # plot_cdf(statistics_per_tcp_flow_duration, "", "", "tcp flow duration", False)
+    # plot_cdf(statistics_per_udp_flow_duration, "", "", "udp flow duration", False)
+    plot_cdf(statistics_per_flow_arrival_interval, "", "", "total flow interval", False)
+    plot_cdf(statistics_per_tcp_flow_arrival_interval, "", "", "tcp flow interval", False)
+    plot_cdf(statistics_per_udp_flow_arrival_interval, "", "", "udp flow interval", False)
     #result_file = open('results.txt', "w+")
     #result_file.close()
 
-main()
+def tcp_flow_state_analysis(flow):
+    #look at each flow
+    request_cnt = 0
+    reset_cnt = 0
+    finished_cnt = 0
+    ongoing_cnt = 0
+    failed_cnt = 0
+    total_cnt = 0
+    flgs = []
+
+
+
+    for key, eths in flow.items():
+        #only look at tcp flow
+        if eths[0][0].data.p != dpkt.ip.IP_PROTO_TCP:
+            continue
+        total_cnt += 1
+        # look at each packet in flow
+        (src,sport),(dst,dport) = key
+        # if src/dst has sent finbit
+        src_fin = False
+        dst_fin = False
+        # if src/dst has been acknowledged
+        src_ack = False
+        dst_ack = False
+        # the src/dst acknowledged number
+        src_seq_number = -1
+        dst_seq_number = -1
+        for (eth,timestamp) in eths:
+            ip = eth.data
+            tcp = ip.data
+            # flags
+            fin_flag = (tcp.flags & dpkt.tcp.TH_FIN) != 0
+            syn_flag = (tcp.flags & dpkt.tcp.TH_SYN) != 0
+            rst_flag = (tcp.flags & dpkt.tcp.TH_RST) != 0
+            ack_flag = (tcp.flags & dpkt.tcp.TH_ACK) != 0
+
+            # check for request state
+            if syn_flag and (not ack_flag) and len(eths) == 1:
+                request_cnt += 1
+            # to find out if a connection finished
+            # need to check if both fin msgs are acknowledged
+            if fin_flag:
+                if ip.src == src:
+                    src_fin = True
+                    src_seq_number = tcp.seq
+                elif ip.src == dst:
+                    dst_fin = True
+                    dst_seq_number = tcp.seq
+            # if src has sent finbit but not acknowledged
+            if src_fin and ack_flag and (not src_ack) and (ip.src == dst) and (tcp.ack == src_seq_number + 1):
+                src_ack = True
+            if dst_fin and ack_flag and (not dst_ack) and (ip.src == src) and (tcp.ack == dst_seq_number + 1):
+                dst_ack = True
+            if src_ack and dst_ack:
+                finished_cnt += 1
+
+        last_packet = eths[-1]
+        last_packet_tcp = last_packet[0].data.data
+        # check for reset state
+        if (last_packet_tcp.flags & dpkt.tcp.TH_RST):
+            reset_cnt += 1
+        if (last_packet_tcp.flags & syn_flag) and (not (last_packet_tcp.flags & ack_flag)):
+            print("request")
+    print(finished_cnt)
+    print(request_cnt)
+    print(reset_cnt)
+
+
+
+def inet_to_str(inet):
+    # First try ipv4 and then ipv6
+    try:
+        return socket.inet_ntop(socket.AF_INET, inet)
+    except ValueError:
+        return socket.inet_ntop(socket.AF_INET6, inet)
+
+if __name__ == "__main__":
+    oneway = False
+    flow = parse_pcap_file('test.pcap', oneway)
+    # flow = parse_pcap_file('univ1_pt20.pcap',oneway)
+    # flow_analysis(flow,oneway)
+    tcp_flow_state_analysis(flow)
