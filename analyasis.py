@@ -7,6 +7,7 @@ from plot import plot_cdf
 # code partly from http://amirrazmjou.net/data-mining-pcap-files-using-weka-and-python-dpkt-library/
 def parse_pcap_file(input_file_name, oneway):
     #variables
+    totalLength = 0
     flow = dict()
     tcp_number = 0;
     udp_number = 0;
@@ -15,12 +16,15 @@ def parse_pcap_file(input_file_name, oneway):
 
     for timestamp, packet in data:
         #print(datetime.fromtimestamp(timestamp))
+        #print(dpkt.pcap.PktHdr(packet).pack_hdr().__repr__())
         eth = dpkt.ethernet.Ethernet(packet)
+        print(eth.__len__())
         if eth.type != dpkt.ethernet.ETH_TYPE_IP:
             continue
         ip = eth.data
         #only look at tcp and udp packets
         if ip.p == dpkt.ip.IP_PROTO_TCP:
+            totalLength = ip.len + 18 + totalLength
             tcp_number += 1
         elif ip.p == dpkt.ip.IP_PROTO_UDP:
             udp_number += 1
@@ -46,7 +50,8 @@ def parse_pcap_file(input_file_name, oneway):
 
 
     #write statistics to file
-
+    print(totalLength)
+    print(tcp_number)
     return flow
     #save_obj(flow)
 
@@ -117,11 +122,7 @@ def tcp_flow_state_analysis(flow):
     reset_cnt = 0
     finished_cnt = 0
     ongoing_cnt = 0
-    failed_cnt = 0
     total_cnt = 0
-    flgs = []
-
-
 
     for key, eths in flow.items():
         #only look at tcp flow
@@ -206,8 +207,7 @@ def flow_size_analysis(flow):
             if is_udp:
                 udp_packet_cnt += 1
             packet_cnt += 1
-            print(eth.__len__())
-        #delete outlier
+        # TODO:delete outlier
         if is_tcp:
             tcp_flow_packet_cnt.append(tcp_packet_cnt)
         if is_udp:
