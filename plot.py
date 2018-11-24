@@ -3,10 +3,10 @@ import matplotlib.pyplot as plt
 
 
 def plot_cdf(data,xlabel,ylabel,title,log):
+    data = data[:round(len(data)*0.9)]
+    x = np.sort(data)
     if log:
-        x = np.log(np.sort(data))
-    else:
-        x =np.sort(data)
+        plt.xscale('log')
     y = np.arange(0,len(x))/len(x)
     plt.plot(x,y)
     plt.xlabel(xlabel)

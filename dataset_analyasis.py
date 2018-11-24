@@ -1,11 +1,11 @@
 import dpkt
 import socket
 import math
-from datetime import datetime
 from plot import plot_cdf, plot_cdf_together
 
-# tcp.__hdr_len__ + len(tcp.opts)
-# code partly from http://amirrazmjou.net/data-mining-pcap-files-using-weka-and-python-dpkt-library/
+# tcp hdr length : tcp.__hdr_len__ + len(tcp.opts)
+# tcp payload size : ip.len- 20 - tcp.__hdr_len__ - len(tcp.opts)
+# code for this function partly from http://amirrazmjou.net/data-mining-pcap-files-using-weka-and-python-dpkt-library/
 def parse_pcap_file(input_file_name, oneway):
     #variables
     flow = dict()
@@ -15,11 +15,7 @@ def parse_pcap_file(input_file_name, oneway):
     data = dpkt.pcap.Reader(f)
 
     for timestamp, packet,size in data:
-        #print(datetime.fromtimestamp(timestamp))
-        #print(dpkt.pcap.PktHdr(packet).pack_hdr().__repr__())
         eth = dpkt.ethernet.Ethernet(packet)
-        #print(eth.__len__())
-        print(size)
         if eth.type != dpkt.ethernet.ETH_TYPE_IP:
             continue
         ip = eth.data
@@ -39,16 +35,16 @@ def parse_pcap_file(input_file_name, oneway):
 
         if not oneway:
             if tupl in flow:
-                flow[tupl].append((eth, timestamp))
+                flow[tupl].append((eth, timestamp, size))
             elif rtupl in flow:
-                flow[rtupl].append((eth, timestamp))
+                flow[rtupl].append((eth, timestamp, size))
             else:
-                flow[tupl] = [(eth, timestamp)]
+                flow[tupl] = [(eth, timestamp, size)]
         else:
             if tupl in flow:
-                flow[tupl].append((eth, timestamp))
+                flow[tupl].append((eth, timestamp,size))
             else:
-                flow[tupl] = [(eth, timestamp)]
+                flow[tupl] = [(eth, timestamp,size)]
 
 
     #write statistics to file
@@ -79,7 +75,7 @@ def flow_analysis(flow,oneway):
             is_tcp = True
         elif eths[0][0].data.p == dpkt.ip.IP_PROTO_UDP:
             is_udp = True
-        for (eth,timestamp) in eths:
+        for (eth,timestamp,size) in eths:
             #print(datetime.fromtimestamp(timestamp))
             if timestamp > maxTime:
                 maxTime = timestamp
@@ -147,7 +143,7 @@ def tcp_flow_state_analysis(flow):
         # the src/dst acknowledged number
         src_seq_number = -1
         dst_seq_number = -1
-        for (eth,timestamp) in eths:
+        for (eth,timestamp,size) in eths:
             ip = eth.data
             tcp = ip.data
             # flags
@@ -230,7 +226,7 @@ def flow_size_analysis(flow):
             is_tcp = True
         elif eths[0][0].data.p == dpkt.ip.IP_PROTO_UDP:
             is_udp = True
-        for (eth,timestamp) in eths:
+        for (eth,timestamp,size) in eths:
             if is_tcp:
                 tcp_packet_cnt += 1
             if is_udp:
@@ -238,30 +234,13 @@ def flow_size_analysis(flow):
             packet_cnt += 1
             ip = eth.data
             tcp = ip.data
+            total_length += size
+            byte_sum += size
             if is_tcp:
-                if ip.len == 40:
-                    frame_length = 24 + ip.len
-                    total_length += frame_length
-                    byte_sum += frame_length
-                    tcp_byte_sum += frame_length
-                    tcp_packet_header_byte_sum += 24 + ip.__hdr_len__ + tcp.__hdr_len__ + len(tcp.opts)
-                else:
-                    frame_length = 18 + ip.len
-                    total_length += frame_length
-                    byte_sum += frame_length
-                    tcp_byte_sum += frame_length
-                    tcp_packet_header_byte_sum += 18 + ip.__hdr_len__ + tcp.__hdr_len__ + len(tcp.opts)
+                tcp_byte_sum += size
+                tcp_packet_header_byte_sum += tcp.__hdr_len__ + len(tcp.opts)
             else:
-                if ip.len == 44:
-                    frame_length = 20 + ip.len
-                    total_length += frame_length
-                    byte_sum += frame_length
-                    udp_byte_sum += frame_length
-                else:
-                    frame_length = 18 + ip.len
-                    total_length += frame_length
-                    byte_sum += frame_length
-                    udp_byte_sum += frame_length
+                udp_byte_sum += size
         # TODO:delete outlier
         if is_tcp:
             tcp_flow_packet_cnt.append(tcp_packet_cnt)
@@ -277,7 +256,7 @@ def flow_size_analysis(flow):
     #plot_cdf(tcp_flow_packet_cnt, "", "", "TCP Flows Packet Number", False)
     #plot_cdf(udp_flow_packet_cnt, "", "", "UDP Flows Packet Number", True)
     #plot_cdf(flow_packet_cnt, "", "", "All Flows Packet Number", False)
-    # plot_cdf(tcp_flow_byte_cnt, "", "", "TCP Flows Bytes", True)
+    plot_cdf(tcp_flow_byte_cnt, "", "", "TCP Flows Bytes", False)
     # plot_cdf(udp_flow_byte_cnt, "", "", "UDP Flows Bytes", False)
     # plot_cdf(flow_byte_cnt, "", "", "All Flows Bytes", False)
     #plot_cdf_together([tcp_flow_byte_cnt,udp_flow_byte_cnt],["tcp flow","udp flow"], "size(byte)","fraction","",True)
@@ -286,7 +265,6 @@ def flow_size_analysis(flow):
 
 def find_top_three_largest_flow(tcp_flow_size_pair):
     largest = sorted(tcp_flow_size_pair, key=lambda x:x[1],reverse=True)[:3]
-    print(largest)
     return largest
 
 def inet_to_str(inet):
@@ -302,5 +280,5 @@ if __name__ == "__main__":
     # parsedFlow = parse_pcap_file('univ1_pt20.pcap',oneway)
     #tcp_flow_duration_key_pair = flow_analysis(parsedFlow,oneway)
     #tcp_flow_state_analysis(parsedFlow)
-    #(tcp_flow_packet_cnt_pair, tcp_flow_byte_cnt_pair) = flow_size_analysis(parsedFlow)
+    (tcp_flow_packet_cnt_pair, tcp_flow_byte_cnt_pair) = flow_size_analysis(parsedFlow)
     #find_top_three_largest_flow(tcp_flow_duration_key_pair)
