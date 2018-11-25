@@ -48,3 +48,13 @@ def plot_rtt_function(data_list,labels, xlabel,ylabel,title,log):
     plt.ylabel(ylabel)
     plt.title(title)
     plt.show()
+
+def plot_host_rtt_function(data,xlabel,ylabel,title):
+    # y is representative rtt and x is start time
+    y,x = zip(*data)
+    plt.plot(x, y, marker = 'o')
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.margins(0.02)
+    plt.show()

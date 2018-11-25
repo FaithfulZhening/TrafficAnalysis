@@ -53,6 +53,7 @@ def parse_pcap_file(input_file_name, oneway):
     #save_obj(flow)
 
 
+
 # flow duration and arrival interval analysis
 def flow_analysis(flow,oneway):
     #statistics about flow
@@ -264,9 +265,30 @@ def flow_size_analysis(flow):
     # plot_cdf(tcp_flow_overhead_ratio,"","","TCP Flow Overhead Ratio",False)
     return (tcp_flow_packet_cnt_pair,tcp_flow_byte_cnt_pair)
 
+
 def find_top_three_largest_flow(tcp_flow_size_pair):
     largest = sorted(tcp_flow_size_pair, key=lambda x:x[1],reverse=True)[:3]
     return largest
+
+
+def find_top_three_hosts(flow):
+    tcp_connection_cnt_pair = dict()
+    for key, eths in flow.items():
+        ip = eths[0][0].data
+        if ip.p == dpkt.ip.IP_PROTO_TCP:
+            tupl = (ip.src, ip.dst)
+            rtupl = (ip.dst,ip.src)
+            if tupl in tcp_connection_cnt_pair:
+                tcp_connection_cnt_pair[tupl].append(eths)
+            elif rtupl in tcp_connection_cnt_pair:
+                tcp_connection_cnt_pair[rtupl].append(eths)
+            else:
+                tcp_connection_cnt_pair[tupl] = [eths]
+    # for key, eths_list in tcp_connection_cnt_pair.items():
+    #     print(len(eths_list))
+    largest = [(k,tcp_connection_cnt_pair[k]) for k in sorted(tcp_connection_cnt_pair, key=lambda x:len(tcp_connection_cnt_pair[x]),reverse=True)][:3]
+    return largest
+
 
 def inet_to_str(inet):
     # First try ipv4 and then ipv6
