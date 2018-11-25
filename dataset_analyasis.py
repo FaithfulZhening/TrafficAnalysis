@@ -71,7 +71,7 @@ def flow_analysis(flow,oneway):
         is_tcp = False
         is_udp = False
         maxTime = 0
-        minTime = math.inf
+        minTime = -1
         last_packet_time = -1
         if eths[0][0].data.p == dpkt.ip.IP_PROTO_TCP:
             is_tcp = True
@@ -81,7 +81,7 @@ def flow_analysis(flow,oneway):
             #print(datetime.fromtimestamp(timestamp))
             if timestamp > maxTime:
                 maxTime = timestamp
-            if timestamp < minTime:
+            if minTime == -1:
                 minTime = timestamp
             if last_packet_time == -1:
                 interval = 0
@@ -108,14 +108,15 @@ def flow_analysis(flow,oneway):
         elif is_udp:
             udp_flow += 1
             statistics_per_udp_flow_duration.append(duration)
-    # plot_cdf(statistics_per_flow_duration,"","","total flow duration",False)
-    # plot_cdf(statistics_per_tcp_flow_duration, "", "", "tcp flow duration", False)
-    # plot_cdf(statistics_per_udp_flow_duration, "", "", "udp flow duration", False)
-    # plot_cdf(statistics_per_flow_arrival_interval, "", "", "total flow interval", False)
-    # plot_cdf(statistics_per_tcp_flow_arrival_interval, "", "", "tcp flow interval", False)
-    # plot_cdf(statistics_per_udp_flow_arrival_interval, "", "", "udp flow interval", False)
-    #result_file = open('results.txt', "w+")
-    #result_file.close()
+    plot_cdf(statistics_per_flow_duration,"","","total flow duration",False)
+    plot_cdf(statistics_per_tcp_flow_duration, "", "", "tcp flow duration", False)
+    plot_cdf(statistics_per_udp_flow_duration, "", "", "udp flow duration", False)
+    plot_cdf(statistics_per_flow_arrival_interval, "", "", "total flow interval", False)
+    plot_cdf(statistics_per_tcp_flow_arrival_interval, "", "", "tcp flow interval", False)
+    plot_cdf(statistics_per_udp_flow_arrival_interval, "", "", "udp flow interval", False)
+    plot_cdf_together([statistics_per_tcp_flow_duration,statistics_per_udp_flow_duration],["tcp", "udp"],"time (log ms)", "fraction","TCP and UDP duration", False)
+    plot_cdf_together([statistics_per_tcp_flow_arrival_interval, statistics_per_udp_flow_arrival_interval], ["tcp", "udp"],
+                      "time (log ms)", "fraction", "TCP and UDP interval", False)
     return statistics_per_tcp_flow_duration_pair
 
 def tcp_flow_state_analysis(flow):
@@ -130,6 +131,7 @@ def tcp_flow_state_analysis(flow):
         is_ongoing = False
         is_finished = False
         is_reset = False
+        is_end = False
         #only look at tcp flow
         if eths[0][0].data.p != dpkt.ip.IP_PROTO_TCP:
             continue
@@ -171,7 +173,11 @@ def tcp_flow_state_analysis(flow):
                 src_ack = True
             if dst_fin and ack_flag and (not dst_ack) and (ip.src == src) and (tcp.ack == dst_seq_number + 1):
                 dst_ack = True
-        if src_ack and dst_ack:
+            if (timestamp == eths[-1][1]):
+                is_end = True
+            if src_ack and dst_ack:
+                break
+        if src_ack and dst_ack and is_end:
                 is_finished = True
 
         last_packet = eths[-1]
@@ -180,15 +186,13 @@ def tcp_flow_state_analysis(flow):
         if (last_packet_tcp.flags & dpkt.tcp.TH_RST):
             is_reset = True
         if (not is_request) and (not is_finished) and (not is_reset):
-            is_ongoing += 1
+            ongoing_cnt += 1
         if is_finished:
             finished_cnt += 1
         if is_reset:
             reset_cnt += 1
         if is_request:
             request_cnt += 1
-        if is_ongoing:
-            ongoing_cnt += 1
 
     print("finished: "+ str(finished_cnt))
     print("request: "+ str(request_cnt))
@@ -223,6 +227,7 @@ def flow_size_analysis(flow):
         tcp_byte_sum = 0
         udp_byte_sum = 0
         tcp_packet_header_byte_sum = 0
+        tcp_payload_size = 0
 
         if eths[0][0].data.p == dpkt.ip.IP_PROTO_TCP:
             is_tcp = True
@@ -241,6 +246,7 @@ def flow_size_analysis(flow):
             if is_tcp:
                 tcp_byte_sum += size
                 tcp_packet_header_byte_sum += tcp.__hdr_len__ + len(tcp.opts)
+                tcp_payload_size += (ip.len - tcp.__hdr_len__ - len(tcp.opts) - 20)
             else:
                 udp_byte_sum += size
         # TODO:delete outlier
@@ -249,20 +255,24 @@ def flow_size_analysis(flow):
             tcp_flow_byte_cnt.append(tcp_byte_sum)
             tcp_flow_packet_cnt_pair.append((key,tcp_packet_cnt))
             tcp_flow_byte_cnt_pair.append((key,tcp_byte_sum))
-            tcp_flow_overhead_ratio.append(tcp_packet_header_byte_sum/tcp_byte_sum)
+            if (tcp_payload_size == 0):
+                print("a")
+                tcp_flow_overhead_ratio.append(9999)
+            else:
+                tcp_flow_overhead_ratio.append(tcp_packet_header_byte_sum/tcp_payload_size)
         if is_udp:
             udp_flow_packet_cnt.append(udp_packet_cnt)
             udp_flow_byte_cnt.append(udp_byte_sum)
         flow_packet_cnt.append(packet_cnt)
         flow_byte_cnt.append(byte_sum)
-    #plot_cdf(tcp_flow_packet_cnt, "", "", "TCP Flows Packet Number", False)
-    #plot_cdf(udp_flow_packet_cnt, "", "", "UDP Flows Packet Number", True)
-    #plot_cdf(flow_packet_cnt, "", "", "All Flows Packet Number", False)
-    #plot_cdf(tcp_flow_byte_cnt, "", "", "TCP Flows Bytes", True)
-    # plot_cdf(udp_flow_byte_cnt, "", "", "UDP Flows Bytes", False)
-    # plot_cdf(flow_byte_cnt, "", "", "All Flows Bytes", False)
-    #plot_cdf_together([tcp_flow_byte_cnt,udp_flow_byte_cnt],["tcp flow","udp flow"], "size(byte)","fraction","",True)
-    # plot_cdf(tcp_flow_overhead_ratio,"","","TCP Flow Overhead Ratio",False)
+    # plot_cdf(tcp_flow_packet_cnt, "Number", "Fraction", "TCP Flows Packet Number", True)
+    # plot_cdf(udp_flow_packet_cnt, "Number", "Fraction", "UDP Flows Packet Number", True)
+    # plot_cdf(flow_packet_cnt, "Number", "Fraction", "All Flows Packet Number", True)
+    # plot_cdf(tcp_flow_byte_cnt, "Size(Byte)", "Fraction", "TCP Flows Bytes", True)
+    # plot_cdf(udp_flow_byte_cnt, "Size(Byte)", "Fraction", "UDP Flows Bytes", True)
+    # plot_cdf(flow_byte_cnt, "Size(Byte)", "Fraction", "All Flows Bytes", True)
+    # plot_cdf_together([tcp_flow_byte_cnt,udp_flow_byte_cnt],["tcp flow","udp flow"], "size(byte)","fraction","",True)
+    plot_cdf(tcp_flow_overhead_ratio,"","","TCP Flow Overhead Ratio",True)
     return (tcp_flow_packet_cnt_pair,tcp_flow_byte_cnt_pair)
 
 

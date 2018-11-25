@@ -3,8 +3,9 @@ import matplotlib.pyplot as plt
 
 
 def plot_cdf(data,xlabel,ylabel,title,log):
-    data = data[:round(len(data)*0.9)]
     x = np.sort(data)
+    #delete outlier
+    x = x[:round(len(x)*0.9)]
     if log:
         plt.xscale('log')
     y = np.arange(0,len(x))/len(x)
@@ -22,6 +23,8 @@ def plot_cdf_together(data_list,labels,xlabel,ylabel,title,log):
         data = data_list[i]
         label = labels[i]
         x = np.sort(data)
+        #delete outlier
+        # x = x[:round(len(x)*0.9)]
         y = np.arange(0, len(x)) / len(x)
         plt.plot(x, y, label = label)
         plt.legend(loc='best')
@@ -52,7 +55,7 @@ def plot_rtt_function(data_list,labels, xlabel,ylabel,title,log):
 def plot_host_rtt_function(data,xlabel,ylabel,title):
     # y is representative rtt and x is start time
     y,x = zip(*data)
-    plt.plot(x, y, marker = 'o')
+    plt.plot(x, y)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.title(title)
