@@ -2,6 +2,7 @@ import dpkt
 import socket
 import math
 from plot import plot_cdf, plot_cdf_together
+from rtt_analysis import analyze_rtt
 
 # tcp hdr length : tcp.__hdr_len__ + len(tcp.opts)
 # tcp payload size : ip.len- 20 - tcp.__hdr_len__ - len(tcp.opts)
@@ -256,7 +257,7 @@ def flow_size_analysis(flow):
     #plot_cdf(tcp_flow_packet_cnt, "", "", "TCP Flows Packet Number", False)
     #plot_cdf(udp_flow_packet_cnt, "", "", "UDP Flows Packet Number", True)
     #plot_cdf(flow_packet_cnt, "", "", "All Flows Packet Number", False)
-    plot_cdf(tcp_flow_byte_cnt, "", "", "TCP Flows Bytes", False)
+    #plot_cdf(tcp_flow_byte_cnt, "", "", "TCP Flows Bytes", True)
     # plot_cdf(udp_flow_byte_cnt, "", "", "UDP Flows Bytes", False)
     # plot_cdf(flow_byte_cnt, "", "", "All Flows Bytes", False)
     #plot_cdf_together([tcp_flow_byte_cnt,udp_flow_byte_cnt],["tcp flow","udp flow"], "size(byte)","fraction","",True)
@@ -281,4 +282,3 @@ if __name__ == "__main__":
     #tcp_flow_duration_key_pair = flow_analysis(parsedFlow,oneway)
     #tcp_flow_state_analysis(parsedFlow)
     (tcp_flow_packet_cnt_pair, tcp_flow_byte_cnt_pair) = flow_size_analysis(parsedFlow)
-    #find_top_three_largest_flow(tcp_flow_duration_key_pair)
